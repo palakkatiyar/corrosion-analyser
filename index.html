@@ -145,15 +145,27 @@
     gap: 1rem;
     flex: 1;
   }
-  #preview-img {
+  #main-canvas {
     width: 100%;
     border-radius: 10px;
-    max-height: 340px;
-    object-fit: contain;
     background: #0f1117;
     border: 1px solid var(--border);
     cursor: pointer;
+    display: block;
   }
+  .legend { display: none; gap: 10px; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .leg-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── Zone cards ── */
+  .zones-list { display: flex; flex-direction: column; gap: 6px; }
+  .zone-card {
+    background: #0f1117; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 13px; display: flex; gap: 10px; align-items: flex-start;
+  }
+  .zone-color-bar { width: 4px; border-radius: 2px; flex-shrink: 0; align-self: stretch; }
+  .zone-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+  .zone-desc { font-size: 12px; color: #a0aec0; line-height: 1.55; }
   .img-meta {
     font-size: 12px; color: var(--muted);
     font-family: 'JetBrains Mono', monospace;
@@ -363,10 +375,16 @@
         </div>
       </div>
 
-      <!-- Preview -->
+      <!-- Preview canvas (image + labelled corrosion zones) -->
       <div id="preview-wrap">
-        <img id="preview-img" alt="Uploaded image" title="Click to choose a different image"
-             onclick="document.getElementById('file-input').click()">
+        <canvas id="main-canvas" title="Click to choose a different image"
+                onclick="document.getElementById('file-input').click()"></canvas>
+        <div class="legend" id="legend">
+          <div class="leg-item"><div class="leg-dot" style="background:#e74c3c;"></div> Critical</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#e67e22;"></div> Severe</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#f1c40f;"></div> Moderate</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#27ae60;"></div> Minor</div>
+        </div>
         <div class="img-meta" id="img-meta"></div>
       </div>
 
@@ -407,6 +425,22 @@
 <script>
 let imageBase64 = '';
 let imageMime = '';
+let loadedImage = null;
+
+const SEV_COLOR = {
+  CRITICAL: '#e74c3c',
+  SEVERE:   '#e67e22',
+  MODERATE: '#f1c40f',
+  MINOR:    '#27ae60',
+  NONE:     '#27ae60'
+};
+
+function drawImageOnly(img) {
+  const canvas = document.getElementById('main-canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  canvas.getContext('2d').drawImage(img, 0, 0);
+}
 
 function checkReady() {
   document.getElementById('btn-analyse').disabled = !imageBase64;
@@ -445,16 +479,24 @@ function handleFile(file) {
       }
       imageBase64 = dataUrl.split(',')[1];
 
-      // Show preview
-      document.getElementById('dropzone').style.display = 'none';
-      const pw = document.getElementById('preview-wrap');
-      pw.style.display = 'flex';
-      document.getElementById('preview-img').src = dataUrl;
-      document.getElementById('img-meta').textContent =
-        `${(file.size/1024).toFixed(1)} KB  •  ${file.type}`;
-
-      checkReady();
-      resetResults();
+      const finalise = im => {
+        loadedImage = im;
+        drawImageOnly(im);
+        document.getElementById('dropzone').style.display = 'none';
+        document.getElementById('preview-wrap').style.display = 'flex';
+        document.getElementById('legend').style.display = 'none';
+        document.getElementById('img-meta').textContent =
+          `${(file.size/1024).toFixed(1)} KB  •  ${im.width}×${im.height}px`;
+        checkReady();
+        resetResults();
+      };
+      if (dataUrl === e.target.result) {
+        finalise(img);
+      } else {
+        const scaled = new Image();
+        scaled.onload = () => finalise(scaled);
+        scaled.src = dataUrl;
+      }
     };
     img.src = e.target.result;
   };
@@ -477,6 +519,10 @@ async function analyse() {
   document.getElementById('btn-text').textContent = 'Analysing...';
   document.getElementById('btn-analyse').disabled = true;
 
+  // Redraw a clean image (removes boxes from a previous run)
+  drawImageOnly(loadedImage);
+  document.getElementById('legend').style.display = 'none';
+
   const prompt = `You are an expert corrosion and structural inspection engineer.
 Analyse this image of a structure, equipment, or surface and provide a detailed corrosion assessment.
 
@@ -494,16 +540,24 @@ Reserve SEVERE and CRITICAL for clear evidence of metal wastage, pitting, or str
 When the image resolution leaves the depth of attack uncertain, choose the LOWER severity grade and
 note the uncertainty in your findings.
 
+Also identify each DISTINCT corrosion zone visible and estimate its bounding box as percentages
+of image width and height (0-100). Example: a rust patch occupying the top-left quarter is
+x_pct=0, y_pct=0, w_pct=50, h_pct=50. Be as precise as you can with the boxes.
+
 Respond ONLY in the following JSON format with no markdown or extra text:
 {
   "severity": "CRITICAL|SEVERE|MODERATE|MINOR|NONE",
   "overall_summary": "2-3 sentence summary of what you see and the corrosion condition overall",
-  "findings": [
-    "specific finding 1",
-    "specific finding 2",
-    "specific finding 3"
+  "zones": [
+    {
+      "id": 1,
+      "label": "short zone name e.g. Upper lattice members",
+      "severity": "CRITICAL|SEVERE|MODERATE|MINOR",
+      "x_pct": 10, "y_pct": 15, "w_pct": 30, "h_pct": 25,
+      "description": "what is visible here — type of corrosion, coating condition, etc."
+    }
   ],
-  "affected_areas": "description of which parts or zones are most affected",
+  "affected_area_pct": "estimated % of visible surface affected",
   "root_cause": "likely cause of corrosion based on visual evidence",
   "recommended_actions": [
     "action 1",
@@ -513,7 +567,7 @@ Respond ONLY in the following JSON format with no markdown or extra text:
   "urgency": "Immediate|Within 1 month|Within 3 months|Routine monitoring|No action needed"
 }
 
-Be specific and technical. If there is no corrosion visible, say so clearly.`;
+Be specific and technical. If there is no corrosion visible, say so clearly and return an empty zones array.`;
 
   try {
     const res = await fetch(
@@ -530,7 +584,7 @@ Be specific and technical. If there is no corrosion visible, say so clearly.`;
           }],
           generationConfig: {
             temperature: 0.2,
-            maxOutputTokens: 2048,
+            maxOutputTokens: 4096,
             responseMimeType: 'application/json'
           }
         })
@@ -550,9 +604,11 @@ Be specific and technical. If there is no corrosion visible, say so clearly.`;
     const end = raw.lastIndexOf('}');
     if (start === -1 || end === -1) throw new Error('No JSON found in the model response.');
     const result = JSON.parse(raw.slice(start, end + 1));
+    drawBoxes(result.zones || []);
     renderResult(result);
 
   } catch (err) {
+    drawImageOnly(loadedImage);
     document.getElementById('result-panel').innerHTML = `
       <div class="error-box">
         <strong>Analysis failed:</strong><br>${esc(err.message)}<br><br>
@@ -574,17 +630,60 @@ function sevClass(s) {
   const map = { CRITICAL:'sev-critical', SEVERE:'sev-severe', MODERATE:'sev-moderate', MINOR:'sev-minor', NONE:'sev-none' };
   return map[s] || 'sev-minor';
 }
-function sevDot(s) {
-  const map = { CRITICAL:'#e74c3c', SEVERE:'#e67e22', MODERATE:'#f1c40f', MINOR:'#2ecc71', NONE:'#2ecc71' };
-  return map[s] || '#6b7280';
+
+function drawBoxes(zones) {
+  if (!zones.length) return;
+  const canvas = document.getElementById('main-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  ctx.drawImage(loadedImage, 0, 0);
+
+  zones.forEach(zone => {
+    const x = (zone.x_pct / 100) * W;
+    const y = (zone.y_pct / 100) * H;
+    const w = (zone.w_pct / 100) * W;
+    const h = (zone.h_pct / 100) * H;
+    const col = SEV_COLOR[zone.severity] || '#ffffff';
+    const lw = Math.max(3, W * 0.004);
+
+    ctx.strokeStyle = col;
+    ctx.lineWidth = lw;
+    ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = col + '22';
+    ctx.fillRect(x, y, w, h);
+
+    const labelText = `${zone.id}. ${zone.label} — ${zone.severity}`;
+    const fontSize = Math.max(13, Math.min(22, W * 0.018));
+    ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+    const tw = ctx.measureText(labelText).width;
+    const padX = 10, padY = 6;
+    const lbH = fontSize + padY * 2;
+    const lbY = y > lbH + 4 ? y - lbH - 2 : y + 2;
+
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.roundRect(x, lbY, tw + padX * 2, lbH, 4);
+    ctx.fill();
+
+    ctx.fillStyle = zone.severity === 'MODERATE' ? '#000' : '#fff';
+    ctx.fillText(labelText, x + padX, lbY + padY + fontSize * 0.8);
+  });
+
+  document.getElementById('legend').style.display = 'flex';
 }
 
 function renderResult(r) {
-  const findingsHtml = (r.findings || []).map(f => `
-    <div class="finding-card">
-      <div class="finding-dot" style="background:${sevDot(r.severity)}"></div>
-      <p>${esc(f)}</p>
-    </div>`).join('');
+  const zonesHtml = (r.zones || []).map(z => {
+    const col = SEV_COLOR[z.severity] || '#fff';
+    return `<div class="zone-card">
+      <div class="zone-color-bar" style="background:${col}"></div>
+      <div>
+        <div class="zone-title">${z.id}. ${esc(z.label)} <span style="color:${col};font-size:11px;">[${esc(z.severity)}]</span></div>
+        <div class="zone-desc">${esc(z.description)}</div>
+      </div>
+    </div>`;
+  }).join('');
 
   const actionsHtml = (r.recommended_actions || []).map((a, i) => `
     <div class="action-item">
@@ -608,13 +707,13 @@ function renderResult(r) {
     </div>
 
     <div class="result-section">
-      <div class="result-label">Key Findings</div>
-      <div class="findings-grid">${findingsHtml}</div>
+      <div class="result-label">Detected Zones <span style="color:var(--gold);font-weight:700;">(labelled on image)</span></div>
+      <div class="zones-list">${zonesHtml || '<div style="font-size:13px;color:var(--muted);">No corrosion zones detected.</div>'}</div>
     </div>
 
     <div class="result-section">
-      <div class="result-label">Most Affected Areas</div>
-      <div class="result-text">${esc(r.affected_areas)}</div>
+      <div class="result-label">Surface Coverage</div>
+      <div class="result-text">${esc(r.affected_area_pct)} of visible surface affected</div>
     </div>
 
     <div class="result-section">
@@ -634,7 +733,10 @@ function renderResult(r) {
 function resetApp() {
   imageBase64 = '';
   imageMime = '';
+  loadedImage = null;
   document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('legend').style.display = 'none';
+  document.getElementById('img-meta').textContent = '';
   document.getElementById('dropzone').style.display = 'flex';
   document.getElementById('btn-text').textContent = 'Analyse Image';
   checkReady();
