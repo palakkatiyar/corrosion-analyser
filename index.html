@@ -391,28 +391,11 @@
 </footer>
 
 <script>
-let apiKey = '';
 let imageBase64 = '';
 let imageMime = '';
 
-// Load the Gemini API key from the .env file (served alongside this page)
-fetch('.env')
-  .then(r => { if (!r.ok) throw new Error('.env not found'); return r.text(); })
-  .then(text => {
-    const match = text.match(/^\s*GEMINI_API_KEY\s*=\s*["']?([^\s"']+)/m);
-    if (!match) throw new Error('GEMINI_API_KEY not found in .env');
-    apiKey = match[1];
-    checkReady();
-  })
-  .catch(err => {
-    alert('Could not load API key: ' + err.message +
-      '\n\nCreate a .env file next to this page containing:\nGEMINI_API_KEY=your_key_here' +
-      '\n\nNote: the page must be opened via a local server (e.g. python -m http.server), not as a file.');
-  });
-
 function checkReady() {
-  const ready = apiKey && imageBase64;
-  document.getElementById('btn-analyse').disabled = !ready;
+  document.getElementById('btn-analyse').disabled = !imageBase64;
 }
 
 // Drag & drop
@@ -427,24 +410,39 @@ dz.addEventListener('drop', e => {
 
 function handleFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
-  imageMime = file.type;
 
   const reader = new FileReader();
   reader.onload = e => {
-    const dataUrl = e.target.result;
-    imageBase64 = dataUrl.split(',')[1];
+    // Downscale large photos so the request stays under the serverless
+    // function's ~4.5 MB body limit (and keeps token usage low).
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1600;
+      let dataUrl = e.target.result;
+      imageMime = file.type;
+      if (img.width > MAX || img.height > MAX) {
+        const scale = MAX / Math.max(img.width, img.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        imageMime = 'image/jpeg';
+      }
+      imageBase64 = dataUrl.split(',')[1];
 
-    // Show preview
-    document.getElementById('dropzone').style.display = 'none';
-    const pw = document.getElementById('preview-wrap');
-    pw.style.display = 'flex';
-    document.getElementById('preview-img').src = dataUrl;
-    document.getElementById('img-meta').textContent =
-      `${file.name}  •  ${(file.size/1024).toFixed(1)} KB  •  ${file.type}`;
+      // Show preview
+      document.getElementById('dropzone').style.display = 'none';
+      const pw = document.getElementById('preview-wrap');
+      pw.style.display = 'flex';
+      document.getElementById('preview-img').src = dataUrl;
+      document.getElementById('img-meta').textContent =
+        `${file.name}  •  ${(file.size/1024).toFixed(1)} KB  •  ${file.type}`;
 
-    checkReady();
-    // Reset results
-    resetResults();
+      checkReady();
+      resetResults();
+    };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -458,7 +456,7 @@ function resetResults() {
 }
 
 async function analyse() {
-  if (!apiKey || !imageBase64) return;
+  if (!imageBase64) return;
 
   // Loading state
   document.getElementById('spinner').style.display = 'block';
@@ -491,7 +489,7 @@ Be specific and technical. If there is no corrosion visible, say so clearly.`;
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+      '/api/analyse',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -530,7 +528,7 @@ Be specific and technical. If there is no corrosion visible, say so clearly.`;
     document.getElementById('result-panel').innerHTML = `
       <div class="error-box">
         <strong>Analysis failed:</strong><br>${esc(err.message)}<br><br>
-        Check your API key is valid and has Gemini API access enabled.
+        Please try again. If this persists, the server's Gemini API key may be invalid or out of quota.
       </div>`;
   } finally {
     document.getElementById('spinner').style.display = 'none';
