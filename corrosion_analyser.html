@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corrosion Analyser — AI Powered</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0f1117;
+    --surface:   #181c27;
+    --border:    #252a38;
+    --navy:      #1a3a6b;
+    --gold:      #e8a020;
+    --gold-dim:  #b87d18;
+    --red:       #c0392b;
+    --orange:    #e67e22;
+    --yellow:    #f1c40f;
+    --green:     #27ae60;
+    --text:      #e8eaf0;
+    --muted:     #6b7280;
+    --accent:    #3b82f6;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--navy);
+    border-bottom: 3px solid var(--gold);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--gold);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px; color: var(--navy);
+  }
+  .logo-text { font-size: 15px; font-weight: 600; color: #fff; }
+  .logo-sub  { font-size: 11px; color: #a8c4e8; font-weight: 400; }
+  .badge {
+    font-size: 11px; font-weight: 600;
+    background: rgba(232,160,32,.15);
+    color: var(--gold);
+    border: 1px solid rgba(232,160,32,.3);
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: .02em;
+  }
+
+  /* ── Main layout ── */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 2rem;
+    gap: 1.5rem;
+  }
+
+  /* ── Panel ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .panel-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .panel-title { font-size: 14px; font-weight: 600; }
+  .panel-body { padding: 1.5rem; flex: 1; display: flex; flex-direction: column; }
+
+  /* ── Drop zone ── */
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 220px;
+  }
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--gold);
+    background: rgba(232,160,32,.04);
+  }
+  .dropzone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon {
+    font-size: 40px; margin-bottom: 12px; opacity: .6;
+  }
+  .drop-text { font-size: 14px; color: var(--muted); line-height: 1.6; }
+  .drop-text strong { color: var(--gold); }
+
+  /* ── Preview ── */
+  #preview-wrap {
+    display: none;
+    flex-direction: column;
+    gap: 1rem;
+    flex: 1;
+  }
+  #preview-img {
+    width: 100%;
+    border-radius: 10px;
+    max-height: 340px;
+    object-fit: contain;
+    background: #0f1117;
+    border: 1px solid var(--border);
+  }
+  .img-meta {
+    font-size: 12px; color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Analyse button ── */
+  #btn-analyse {
+    margin-top: auto;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--gold);
+    color: var(--navy);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity .2s, transform .1s;
+    width: 100%;
+    margin-top: 1rem;
+  }
+  #btn-analyse:hover:not(:disabled) { opacity: .88; transform: translateY(-1px); }
+  #btn-analyse:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(26,58,107,.4);
+    border-top-color: var(--navy);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Results panel ── */
+  #result-placeholder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    text-align: center;
+    gap: 12px;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .placeholder-icon { font-size: 48px; opacity: .3; }
+
+  /* ── Severity badge ── */
+  .severity-bar {
+    display: flex; gap: 8px; margin-bottom: 1.25rem; flex-wrap: wrap;
+  }
+  .sev-badge {
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 12px; font-weight: 700;
+    letter-spacing: .04em;
+  }
+  .sev-critical { background: rgba(192,57,43,.2); color: #e74c3c; border: 1px solid rgba(192,57,43,.4); }
+  .sev-severe   { background: rgba(230,126,34,.2); color: #e67e22; border: 1px solid rgba(230,126,34,.4); }
+  .sev-moderate { background: rgba(241,196,15,.2); color: #f1c40f; border: 1px solid rgba(241,196,15,.4); }
+  .sev-minor    { background: rgba(39,174,96,.2);  color: #2ecc71; border: 1px solid rgba(39,174,96,.4); }
+  .sev-none     { background: rgba(39,174,96,.2);  color: #2ecc71; border: 1px solid rgba(39,174,96,.4); }
+
+  /* ── Result sections ── */
+  .result-section {
+    margin-bottom: 1.25rem;
+  }
+  .result-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .result-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .result-text {
+    font-size: 14px;
+    line-height: 1.75;
+    color: #c8d0e0;
+  }
+
+  /* ── Finding cards ── */
+  .findings-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .finding-card {
+    background: #0f1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .finding-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+  .finding-card p { font-size: 13px; line-height: 1.6; color: #c8d0e0; }
+
+  /* ── Action items ── */
+  .action-list {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .action-item {
+    display: flex; gap: 10px; align-items: flex-start;
+    font-size: 13px; line-height: 1.6; color: #c8d0e0;
+  }
+  .action-num {
+    background: var(--navy);
+    color: var(--gold);
+    font-size: 11px; font-weight: 700;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* ── Error ── */
+  .error-box {
+    background: rgba(192,57,43,.1);
+    border: 1px solid rgba(192,57,43,.3);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 13px;
+    color: #e74c3c;
+    line-height: 1.6;
+  }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 1rem;
+    font-size: 11px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">AI</div>
+    <div>
+      <div class="logo-text">Corrosion Analyser</div>
+      <div class="logo-sub">Powered by Gemini Vision AI</div>
+    </div>
+  </div>
+  <div class="badge">NTECL Engineers' Day 2026</div>
+</header>
+
+<main>
+
+  <!-- LEFT: Upload panel -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-icon" style="background:rgba(232,160,32,.15)">📤</div>
+      <div>
+        <div class="panel-title">Upload Image</div>
+      </div>
+    </div>
+    <div class="panel-body">
+
+      <!-- Drop zone -->
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="file-input" accept="image/*" onchange="handleFile(this.files[0])">
+        <div class="drop-icon">🖼</div>
+        <div class="drop-text">
+          <strong>Click to upload</strong> or drag & drop<br>
+          JPG, PNG, WEBP — any structure or surface photo
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div id="preview-wrap">
+        <img id="preview-img" alt="Uploaded image">
+        <div class="img-meta" id="img-meta"></div>
+      </div>
+
+      <button id="btn-analyse" onclick="analyse()" disabled>
+        <div class="spinner" id="spinner"></div>
+        <span id="btn-text">Analyse with Gemini Vision AI</span>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- RIGHT: Results panel -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-icon" style="background:rgba(59,130,246,.15)">🔬</div>
+      <div>
+        <div class="panel-title">AI Analysis Report</div>
+      </div>
+    </div>
+    <div class="panel-body" id="result-panel">
+      <div id="result-placeholder">
+        <div class="placeholder-icon">🔍</div>
+        <div>
+          Upload an image of any structure, equipment,<br>
+          or surface and Gemini will detect corrosion,<br>
+          assess severity, and recommend actions.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Gemini Vision AI • For demonstration at NTECL Engineers' Day 2026 • Images are not stored
+</footer>
+
+<script>
+let apiKey = '';
+let imageBase64 = '';
+let imageMime = '';
+
+// Load the Gemini API key from the .env file (served alongside this page)
+fetch('.env')
+  .then(r => { if (!r.ok) throw new Error('.env not found'); return r.text(); })
+  .then(text => {
+    const match = text.match(/^\s*GEMINI_API_KEY\s*=\s*["']?([^\s"']+)/m);
+    if (!match) throw new Error('GEMINI_API_KEY not found in .env');
+    apiKey = match[1];
+    checkReady();
+  })
+  .catch(err => {
+    alert('Could not load API key: ' + err.message +
+      '\n\nCreate a .env file next to this page containing:\nGEMINI_API_KEY=your_key_here' +
+      '\n\nNote: the page must be opened via a local server (e.g. python -m http.server), not as a file.');
+  });
+
+function checkReady() {
+  const ready = apiKey && imageBase64;
+  document.getElementById('btn-analyse').disabled = !ready;
+}
+
+// Drag & drop
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  imageMime = file.type;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    imageBase64 = dataUrl.split(',')[1];
+
+    // Show preview
+    document.getElementById('dropzone').style.display = 'none';
+    const pw = document.getElementById('preview-wrap');
+    pw.style.display = 'flex';
+    document.getElementById('preview-img').src = dataUrl;
+    document.getElementById('img-meta').textContent =
+      `${file.name}  •  ${(file.size/1024).toFixed(1)} KB  •  ${file.type}`;
+
+    checkReady();
+    // Reset results
+    resetResults();
+  };
+  reader.readAsDataURL(file);
+}
+
+function resetResults() {
+  document.getElementById('result-panel').innerHTML = `
+    <div id="result-placeholder">
+      <div class="placeholder-icon">🔍</div>
+      <div>Image loaded. Click <strong style="color:var(--gold)">Analyse</strong> to run Gemini Vision AI.</div>
+    </div>`;
+}
+
+async function analyse() {
+  if (!apiKey || !imageBase64) return;
+
+  // Loading state
+  document.getElementById('spinner').style.display = 'block';
+  document.getElementById('btn-text').textContent = 'Analysing...';
+  document.getElementById('btn-analyse').disabled = true;
+
+  const prompt = `You are an expert corrosion and structural inspection engineer.
+Analyse this image of a structure, equipment, or surface and provide a detailed corrosion assessment.
+
+Respond ONLY in the following JSON format with no markdown or extra text:
+{
+  "severity": "CRITICAL|SEVERE|MODERATE|MINOR|NONE",
+  "overall_summary": "2-3 sentence summary of what you see and the corrosion condition overall",
+  "findings": [
+    "specific finding 1",
+    "specific finding 2",
+    "specific finding 3"
+  ],
+  "affected_areas": "description of which parts or zones are most affected",
+  "root_cause": "likely cause of corrosion based on visual evidence",
+  "recommended_actions": [
+    "action 1",
+    "action 2",
+    "action 3"
+  ],
+  "urgency": "Immediate|Within 1 month|Within 3 months|Routine monitoring|No action needed"
+}
+
+Be specific and technical. If there is no corrosion visible, say so clearly.`;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: imageMime, data: imageBase64 } }
+            ]
+          }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+        })
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || `API error ${res.status}`);
+    }
+
+    const data = await res.json();
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Strip possible markdown code fences
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const result = JSON.parse(clean);
+    renderResult(result);
+
+  } catch (err) {
+    document.getElementById('result-panel').innerHTML = `
+      <div class="error-box">
+        <strong>Analysis failed:</strong><br>${err.message}<br><br>
+        Check your API key is valid and has Gemini API access enabled.
+      </div>`;
+  } finally {
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('btn-text').textContent = 'Analyse Again';
+    document.getElementById('btn-analyse').disabled = false;
+  }
+}
+
+function sevClass(s) {
+  const map = { CRITICAL:'sev-critical', SEVERE:'sev-severe', MODERATE:'sev-moderate', MINOR:'sev-minor', NONE:'sev-none' };
+  return map[s] || 'sev-minor';
+}
+function sevDot(s) {
+  const map = { CRITICAL:'#e74c3c', SEVERE:'#e67e22', MODERATE:'#f1c40f', MINOR:'#2ecc71', NONE:'#2ecc71' };
+  return map[s] || '#6b7280';
+}
+
+function renderResult(r) {
+  const findingsHtml = (r.findings || []).map(f => `
+    <div class="finding-card">
+      <div class="finding-dot" style="background:${sevDot(r.severity)}"></div>
+      <p>${f}</p>
+    </div>`).join('');
+
+  const actionsHtml = (r.recommended_actions || []).map((a, i) => `
+    <div class="action-item">
+      <div class="action-num">${i+1}</div>
+      <div>${a}</div>
+    </div>`).join('');
+
+  document.getElementById('result-panel').innerHTML = `
+    <div class="severity-bar">
+      <span class="sev-badge ${sevClass(r.severity)}">${r.severity} CORROSION</span>
+      <span class="sev-badge" style="background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3)">
+        URGENCY: ${r.urgency}
+      </span>
+    </div>
+
+    <div class="result-section">
+      <div class="result-label">Summary</div>
+      <div class="result-text">${r.overall_summary}</div>
+    </div>
+
+    <div class="result-section">
+      <div class="result-label">Key Findings</div>
+      <div class="findings-grid">${findingsHtml}</div>
+    </div>
+
+    <div class="result-section">
+      <div class="result-label">Most Affected Areas</div>
+      <div class="result-text">${r.affected_areas}</div>
+    </div>
+
+    <div class="result-section">
+      <div class="result-label">Root Cause</div>
+      <div class="result-text">${r.root_cause}</div>
+    </div>
+
+    <div class="result-section">
+      <div class="result-label">Recommended Actions</div>
+      <div class="action-list">${actionsHtml}</div>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
