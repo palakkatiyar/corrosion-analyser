@@ -76,12 +76,11 @@
     flex: 1;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0;
+    gap: 1.5rem;
     max-width: 1400px;
     margin: 0 auto;
     width: 100%;
     padding: 2rem;
-    gap: 1.5rem;
   }
 
   /* ── Panel ── */
@@ -153,6 +152,7 @@
     object-fit: contain;
     background: #0f1117;
     border: 1px solid var(--border);
+    cursor: pointer;
   }
   .img-meta {
     font-size: 12px; color: var(--muted);
@@ -161,7 +161,6 @@
 
   /* ── Analyse button ── */
   #btn-analyse {
-    margin-top: auto;
     padding: 14px;
     border-radius: 10px;
     border: none;
@@ -341,7 +340,8 @@
 
       <!-- Drop zone -->
       <div class="dropzone" id="dropzone">
-        <input type="file" id="file-input" accept="image/*" onchange="handleFile(this.files[0])">
+        <input type="file" id="file-input" accept="image/*"
+               onchange="handleFile(this.files[0]); this.value = '';">
         <div class="drop-icon">🖼</div>
         <div class="drop-text">
           <strong>Click to upload</strong> or drag & drop<br>
@@ -351,7 +351,8 @@
 
       <!-- Preview -->
       <div id="preview-wrap">
-        <img id="preview-img" alt="Uploaded image">
+        <img id="preview-img" alt="Uploaded image" title="Click to choose a different image"
+             onclick="document.getElementById('file-input').click()">
         <div class="img-meta" id="img-meta"></div>
       </div>
 
@@ -490,7 +491,7 @@ Be specific and technical. If there is no corrosion visible, say so clearly.`;
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -501,7 +502,11 @@ Be specific and technical. If there is no corrosion visible, say so clearly.`;
               { inline_data: { mime_type: imageMime, data: imageBase64 } }
             ]
           }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 2048,
+            responseMimeType: 'application/json'
+          }
         })
       }
     );
@@ -514,15 +519,17 @@ Be specific and technical. If there is no corrosion visible, say so clearly.`;
     const data = await res.json();
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-    // Strip possible markdown code fences
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const result = JSON.parse(clean);
+    // Strip code fences / surrounding prose and extract the JSON object
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start === -1 || end === -1) throw new Error('No JSON found in the model response.');
+    const result = JSON.parse(raw.slice(start, end + 1));
     renderResult(result);
 
   } catch (err) {
     document.getElementById('result-panel').innerHTML = `
       <div class="error-box">
-        <strong>Analysis failed:</strong><br>${err.message}<br><br>
+        <strong>Analysis failed:</strong><br>${esc(err.message)}<br><br>
         Check your API key is valid and has Gemini API access enabled.
       </div>`;
   } finally {
@@ -530,6 +537,11 @@ Be specific and technical. If there is no corrosion visible, say so clearly.`;
     document.getElementById('btn-text').textContent = 'Analyse Again';
     document.getElementById('btn-analyse').disabled = false;
   }
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function sevClass(s) {
@@ -545,26 +557,28 @@ function renderResult(r) {
   const findingsHtml = (r.findings || []).map(f => `
     <div class="finding-card">
       <div class="finding-dot" style="background:${sevDot(r.severity)}"></div>
-      <p>${f}</p>
+      <p>${esc(f)}</p>
     </div>`).join('');
 
   const actionsHtml = (r.recommended_actions || []).map((a, i) => `
     <div class="action-item">
       <div class="action-num">${i+1}</div>
-      <div>${a}</div>
+      <div>${esc(a)}</div>
     </div>`).join('');
+
+  const sevLabel = r.severity === 'NONE' ? 'NO CORROSION' : `${esc(r.severity)} CORROSION`;
 
   document.getElementById('result-panel').innerHTML = `
     <div class="severity-bar">
-      <span class="sev-badge ${sevClass(r.severity)}">${r.severity} CORROSION</span>
+      <span class="sev-badge ${sevClass(r.severity)}">${sevLabel}</span>
       <span class="sev-badge" style="background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3)">
-        URGENCY: ${r.urgency}
+        URGENCY: ${esc(r.urgency)}
       </span>
     </div>
 
     <div class="result-section">
       <div class="result-label">Summary</div>
-      <div class="result-text">${r.overall_summary}</div>
+      <div class="result-text">${esc(r.overall_summary)}</div>
     </div>
 
     <div class="result-section">
@@ -574,12 +588,12 @@ function renderResult(r) {
 
     <div class="result-section">
       <div class="result-label">Most Affected Areas</div>
-      <div class="result-text">${r.affected_areas}</div>
+      <div class="result-text">${esc(r.affected_areas)}</div>
     </div>
 
     <div class="result-section">
       <div class="result-label">Root Cause</div>
-      <div class="result-text">${r.root_cause}</div>
+      <div class="result-text">${esc(r.root_cause)}</div>
     </div>
 
     <div class="result-section">
