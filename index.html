@@ -481,6 +481,20 @@ async function analyse() {
   const prompt = `You are an expert corrosion and structural inspection engineer.
 Analyse this image of a structure, equipment, or surface and provide a detailed corrosion assessment.
 
+Grade severity by DEPTH of attack and structural impact, NOT by how much surface area is discoloured.
+Use this rubric strictly:
+- CRITICAL: visible section loss, perforation, broken/deformed members, imminent structural risk
+- SEVERE: heavy scaling, deep pitting, laminar rust flaking, significant loss of coating with metal wastage
+- MODERATE: widespread established surface rust, extensive coating failure, but no apparent metal loss
+- MINOR: light or patchy surface rust, rust staining, weathered coating, metal substantially intact
+- NONE: no visible corrosion
+
+Important calibration: uniform light surface rust or oxide patina spread over a large area of a steel
+lattice structure is still MINOR — do not inflate the grade because the discolouration is widespread.
+Reserve SEVERE and CRITICAL for clear evidence of metal wastage, pitting, or structural degradation.
+When the image resolution leaves the depth of attack uncertain, choose the LOWER severity grade and
+note the uncertainty in your findings.
+
 Respond ONLY in the following JSON format with no markdown or extra text:
 {
   "severity": "CRITICAL|SEVERE|MODERATE|MINOR|NONE",
