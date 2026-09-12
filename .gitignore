@@ -1,4 +1,1 @@
-*
-!.gitignore
-!corrosion_analyser.html
-!README.md
+.env
