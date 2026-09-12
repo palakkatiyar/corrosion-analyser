@@ -288,6 +288,22 @@
     margin-top: 2px;
   }
 
+  /* ── Analyse another ── */
+  .btn-again {
+    margin-top: .5rem;
+    padding: 12px;
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--gold);
+    background: transparent;
+    color: var(--gold);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .btn-again:hover { background: rgba(232,160,32,.1); }
+
   /* ── Error ── */
   .error-box {
     background: rgba(192,57,43,.1);
@@ -320,7 +336,6 @@
     <div class="logo-icon">AI</div>
     <div>
       <div class="logo-text">Corrosion Analyser</div>
-      <div class="logo-sub">Powered by Gemini Vision AI</div>
     </div>
   </div>
   <div class="badge">NTECL Engineers' Day 2026</div>
@@ -358,7 +373,7 @@
 
       <button id="btn-analyse" onclick="analyse()" disabled>
         <div class="spinner" id="spinner"></div>
-        <span id="btn-text">Analyse with Gemini Vision AI</span>
+        <span id="btn-text">Analyse Image</span>
       </button>
 
     </div>
@@ -437,7 +452,7 @@ function handleFile(file) {
       pw.style.display = 'flex';
       document.getElementById('preview-img').src = dataUrl;
       document.getElementById('img-meta').textContent =
-        `${file.name}  •  ${(file.size/1024).toFixed(1)} KB  •  ${file.type}`;
+        `${(file.size/1024).toFixed(1)} KB  •  ${file.type}`;
 
       checkReady();
       resetResults();
@@ -598,7 +613,23 @@ function renderResult(r) {
       <div class="result-label">Recommended Actions</div>
       <div class="action-list">${actionsHtml}</div>
     </div>
+
+    <button class="btn-again" onclick="resetApp()">📷 Analyse Another Image</button>
   `;
+}
+
+function resetApp() {
+  imageBase64 = '';
+  imageMime = '';
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('dropzone').style.display = 'flex';
+  document.getElementById('btn-text').textContent = 'Analyse Image';
+  checkReady();
+  document.getElementById('result-panel').innerHTML = `
+    <div id="result-placeholder">
+      <div class="placeholder-icon">🔍</div>
+      <div>Upload the next image to analyse.</div>
+    </div>`;
 }
 </script>
 </body>
