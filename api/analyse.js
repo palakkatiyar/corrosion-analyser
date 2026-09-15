@@ -13,14 +13,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req.body),
-      }
-    );
+    let r;
+    // Retry on transient overload (503) / rate limit (429) with backoff
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(ok => setTimeout(ok, 1500 * attempt));
+      r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req.body),
+        }
+      );
+      if (r.status !== 503 && r.status !== 429) break;
+    }
     const data = await r.json();
     res.status(r.status).json(data);
   } catch (err) {
